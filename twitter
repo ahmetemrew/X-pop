@@ -73,7 +73,16 @@ show_menu() {
     echo ""
 
     # İstatistikler
-    if [ -f "data/tweets.db" ]; then
+    if [ -f "data/bot.db" ]; then
+        TOTAL_POSTED=$(sqlite3 data/bot.db "SELECT COUNT(*) FROM generated_tweets;" 2>/dev/null || echo "0")
+        TODAY=$(date +%Y-%m-%d)
+        TODAY_POSTS=$(sqlite3 data/bot.db "SELECT COUNT(*) FROM generated_tweets WHERE DATE(created_at) = '$TODAY';" 2>/dev/null || echo "0")
+
+        echo -e "${MAGENTA}📊 Hızlı İstatistikler:${NC}"
+        echo -e "  ${GREEN}📤 Toplam Paylaşılan:${NC} ${YELLOW}${TOTAL_POSTED}${NC}"
+        echo -e "  ${GREEN}📅 Bugün Paylaşılan:${NC} ${YELLOW}${TODAY_POSTS}${NC}"
+        echo ""
+    elif [ -f "data/tweets.db" ]; then
         TOTAL_POSTED=$(sqlite3 data/tweets.db "SELECT COUNT(*) FROM posted_tweets;" 2>/dev/null || echo "0")
         TODAY=$(date +%Y-%m-%d)
         TODAY_POSTS=$(sqlite3 data/tweets.db "SELECT COUNT(*) FROM posted_tweets WHERE DATE(posted_at) = '$TODAY';" 2>/dev/null || echo "0")
@@ -94,13 +103,14 @@ show_menu() {
     echo -e "  ${GREEN}4${NC}) ⏸️  Bot'u Durdur"
     echo -e "  ${GREEN}5${NC}) ▶️  Bot'u Başlat"
     echo -e "  ${GREEN}6${NC}) ⚙️  Konfigürasyon Göster"
-    echo -e "  ${GREEN}7${NC}) 📝 Son Log Satırları"
+    echo -e "  ${GREEN}7${NC}) ✏️  Ayarları Düzenle"
+    echo -e "  ${GREEN}8${NC}) 📝 Son Log Satırları"
     echo -e "  ${GREEN}0${NC}) 🚪 Çıkış"
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    read -p "$(echo -e ${YELLOW}Seçiminiz [0-7]: ${NC})" choice
+    read -p "$(echo -e ${YELLOW}Seçiminiz [0-8]: ${NC})" choice
 
     case $choice in
         1) show_stats ;;
@@ -109,7 +119,8 @@ show_menu() {
         4) stop_bot ;;
         5) start_bot ;;
         6) show_config ;;
-        7) show_logs ;;
+        7) edit_settings ;;
+        8) show_logs ;;
         0) exit 0 ;;
         *)
             echo -e "${RED}Geçersiz seçim!${NC}"
@@ -230,6 +241,17 @@ show_config() {
 
     echo ""
     read -p "$(echo -e ${YELLOW}Enter ile geri dön...${NC})"
+    show_menu
+}
+
+# Ayarları düzenle
+edit_settings() {
+    if [ -f "./edit-settings.sh" ]; then
+        bash ./edit-settings.sh
+    else
+        echo -e "${RED}edit-settings.sh bulunamadı!${NC}"
+        sleep 2
+    fi
     show_menu
 }
 
