@@ -87,6 +87,10 @@ class SeleniumTwitterClient:
                         driver_path = os.path.join(driver_dir, filename)
                         break
 
+        # Ensure chromedriver is executable
+        if os.path.isfile(driver_path):
+            os.chmod(driver_path, 0o755)
+
         service = Service(driver_path)
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
