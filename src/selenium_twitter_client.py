@@ -40,11 +40,24 @@ class SeleniumTwitterClient:
 
         # Initialize Chrome driver
         self.driver = self._init_driver(headless)
-        self.wait = WebDriverWait(self.driver, 20)
+        self.wait = WebDriverWait(self.driver, 30)  # Increased from 20 to 30
+
+        # Set timeouts
+        self.driver.set_page_load_timeout(60)  # 60 second page load timeout
+        self.driver.implicitly_wait(10)  # 10 second implicit wait
 
         # Login
         self.is_logged_in = False
-        self.login()
+
+        try:
+            self.login()
+        except Exception as e:
+            self.logger.error(f"Login failed during initialization: {e}")
+            try:
+                self.driver.quit()
+            except:
+                pass
+            raise
 
     def _init_driver(self, headless: bool) -> webdriver.Chrome:
         """Initialize Chrome WebDriver"""

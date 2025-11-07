@@ -6,6 +6,7 @@ from groq import Groq
 import logging
 from typing import List, Dict, Optional
 import yaml
+from .utils import retry_on_exception, sanitize_text, safe_file_operation
 
 
 class AIGenerator:
@@ -43,11 +44,34 @@ class AIGenerator:
     def _load_personalities(self) -> Dict:
         """Load personality configurations"""
         try:
-            with open('config/personalities.yaml', 'r', encoding='utf-8') as f:
-                return yaml.safe_load(f)
+            def load_yaml():
+                with open('config/personalities.yaml', 'r', encoding='utf-8') as f:
+                    return yaml.safe_load(f)
+
+            personalities = safe_file_operation(load_yaml)
+
+            if not personalities or not isinstance(personalities, dict):
+                self.logger.warning("Empty or invalid personalities file, using defaults")
+                return self._get_default_personalities()
+
+            return personalities
+
+        except FileNotFoundError:
+            self.logger.warning("personalities.yaml not found, using defaults")
+            return self._get_default_personalities()
         except Exception as e:
             self.logger.error(f"Error loading personalities: {e}")
-            return {}
+            return self._get_default_personalities()
+
+    def _get_default_personalities(self) -> Dict:
+        """Get default personalities if file is missing"""
+        return {
+            'haber_duyurucu': {
+                'name': 'Haber Duyurucu',
+                'system_prompt': 'Sen bir haber paylaşım botusun. Güncel haberleri takip edip Türkçe tweet atıyorsun.',
+                'style': 'informative'
+            }
+        }
 
     def set_personality(self, personality_name: str):
         """Set the bot's personality"""
@@ -97,27 +121,56 @@ Kurallar:
 """
 
         try:
-            # Generate with Groq
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens
+            # Generate with Groq (with retry logic)
+            @retry_on_exception(
+                max_attempts=3,
+                delay=2.0,
+                backoff=2.0,
+                exceptions=(Exception,)
             )
+            def call_groq_api():
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    timeout=30.0  # 30 second timeout
+                )
 
-            generated_text = response.choices[0].message.content.strip()
+                if not response or not response.choices:
+                    raise ValueError("Empty response from Groq API")
 
-            # Clean up response
+                return response
+
+            response = call_groq_api()
+
+            # Extract and validate content
+            if not response.choices or not response.choices[0].message:
+                self.logger.error("Invalid response structure from Groq")
+                return None
+
+            generated_text = response.choices[0].message.content
+
+            if not generated_text or not generated_text.strip():
+                self.logger.warning("Generated text is empty")
+                return None
+
+            # Sanitize and clean up response
+            generated_text = sanitize_text(generated_text.strip(), max_length=280)
             generated_text = self._clean_tweet(generated_text)
+
+            if len(generated_text) < 10:
+                self.logger.warning(f"Generated tweet too short: {generated_text}")
+                return None
 
             self.logger.info(f"Generated tweet: {generated_text[:50]}...")
             return generated_text
 
         except Exception as e:
-            self.logger.error(f"Error generating tweet: {e}")
+            self.logger.error(f"Error generating tweet: {e}", exc_info=True)
             return None
 
     def _prepare_context(self, tweets: List[Dict]) -> str:

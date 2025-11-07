@@ -4,61 +4,102 @@ Database module for storing tweets and tracking duplicates
 
 import sqlite3
 import json
+import logging
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import hashlib
+import os
 
 
 class Database:
     def __init__(self, db_path: str = "data/tweets.db"):
         self.db_path = db_path
+        self.logger = logging.getLogger(__name__)
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(self.db_path) if os.path.dirname(self.db_path) else '.', exist_ok=True)
+
         self.init_db()
+
+    @contextmanager
+    def _get_connection(self, timeout: float = 30.0):
+        """
+        Context manager for database connections
+
+        Args:
+            timeout: Connection timeout in seconds
+
+        Yields:
+            sqlite3.Connection object
+        """
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=timeout)
+            conn.row_factory = sqlite3.Row
+            # Enable WAL mode for better concurrency
+            conn.execute('PRAGMA journal_mode=WAL')
+            conn.execute('PRAGMA synchronous=NORMAL')
+            yield conn
+            conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            self.logger.error(f"Database error: {e}", exc_info=True)
+            raise
+        finally:
+            if conn:
+                conn.close()
 
     def init_db(self):
         """Initialize database with required tables"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
 
-        # Table for collected tweets
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS collected_tweets (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tweet_id TEXT UNIQUE,
-                author TEXT NOT NULL,
-                content TEXT NOT NULL,
-                content_hash TEXT NOT NULL,
-                url TEXT,
-                collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                processed BOOLEAN DEFAULT FALSE
-            )
-        """)
+                # Table for collected tweets
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS collected_tweets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        tweet_id TEXT UNIQUE,
+                        author TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        content_hash TEXT NOT NULL,
+                        url TEXT,
+                        collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        processed BOOLEAN DEFAULT FALSE
+                    )
+                """)
 
-        # Table for posted tweets
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS posted_tweets (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content TEXT NOT NULL,
-                content_hash TEXT NOT NULL,
-                source_tweet_ids TEXT,
-                personality TEXT,
-                posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                tweet_id TEXT
-            )
-        """)
+                # Table for posted tweets
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS posted_tweets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        content TEXT NOT NULL,
+                        content_hash TEXT NOT NULL,
+                        source_tweet_ids TEXT,
+                        personality TEXT,
+                        posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        tweet_id TEXT
+                    )
+                """)
 
-        # Index for faster duplicate detection
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_content_hash
-            ON collected_tweets(content_hash)
-        """)
+                # Index for faster duplicate detection
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_content_hash
+                    ON collected_tweets(content_hash)
+                """)
 
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_posted_hash
-            ON posted_tweets(content_hash)
-        """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_posted_hash
+                    ON posted_tweets(content_hash)
+                """)
 
-        conn.commit()
-        conn.close()
+            self.logger.info("✅ Database initialized successfully")
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize database: {e}", exc_info=True)
+            raise
 
     def _hash_content(self, content: str) -> str:
         """Generate hash for content to detect duplicates"""
@@ -74,19 +115,21 @@ class Database:
         content_hash = self._hash_content(content)
 
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
 
-            cursor.execute("""
-                INSERT INTO collected_tweets (tweet_id, author, content, content_hash, url)
-                VALUES (?, ?, ?, ?, ?)
-            """, (tweet_id, author, content, content_hash, url))
+                cursor.execute("""
+                    INSERT INTO collected_tweets (tweet_id, author, content, content_hash, url)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (tweet_id, author, content, content_hash, url))
 
-            conn.commit()
-            conn.close()
             return True
         except sqlite3.IntegrityError:
             # Duplicate tweet_id
+            self.logger.debug(f"Duplicate tweet_id: {tweet_id}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error adding collected tweet: {e}")
             return False
 
     def is_content_duplicate(self, content: str, days_back: int = 7) -> bool:

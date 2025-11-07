@@ -5,7 +5,9 @@ Main Bot Orchestrator
 import os
 import yaml
 import logging
-from typing import List, Dict
+import signal
+import atexit
+from typing import List, Dict, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -16,54 +18,90 @@ from .database import Database
 from .duplicate_detector import DuplicateDetector
 from .human_behavior import HumanBehavior, SmartScheduler
 from .image_fetcher import ImageFetcher
+from .utils import validate_config, check_disk_space, cleanup_old_files, safe_file_operation
 
 
 class XPopBot:
     def __init__(self, config_path: str = "config/config.yaml"):
         """Initialize the X-Pop Bot"""
-        # Load environment variables
-        load_dotenv()
+        self._shutdown_requested = False
+        self.twitter: Optional[TwitterClient] = None
+        self.ai: Optional[AIGenerator] = None
+        self.db: Optional[Database] = None
 
-        # Setup logging
-        self._setup_logging()
+        try:
+            # Load environment variables
+            load_dotenv()
 
-        # Load configuration
-        with open(config_path, 'r', encoding='utf-8') as f:
-            self.config = yaml.safe_load(f)
+            # Setup logging
+            self._setup_logging()
 
-        self.logger.info("🚀 Initializing X-Pop Bot...")
+            self.logger.info("🚀 Initializing X-Pop Bot...")
 
-        # Initialize components
-        self.db = Database()
-        self.duplicate_detector = DuplicateDetector(
-            threshold=self.config['duplicate_detection']['similarity_threshold']
-        )
+            # Check disk space
+            if not check_disk_space(min_mb=100):
+                self.logger.warning("⚠️ Low disk space! Consider cleaning up.")
 
-        # Initialize Twitter client (API or Selenium based on config)
-        self.mode = self.config.get('mode', 'api')
-        self.twitter = self._init_twitter_client()
+            # Load and validate configuration
+            def load_config():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    return yaml.safe_load(f)
 
-        # Initialize AI generator
-        self.ai = self._init_ai_generator()
+            raw_config = safe_file_operation(load_config)
+            self.config = validate_config(raw_config)
 
-        # Set personality
-        personality = self.config['bot']['personality']
-        self.ai.set_personality(personality)
+            self.logger.info("✅ Configuration validated")
 
-        # Initialize human behavior simulator
-        human_behavior_config = self.config.get('human_behavior', {})
-        self.human_behavior = HumanBehavior(human_behavior_config)
+            # Create required directories
+            os.makedirs('logs', exist_ok=True)
+            os.makedirs('data', exist_ok=True)
+            os.makedirs('downloads', exist_ok=True)
 
-        # Initialize smart scheduler
-        base_interval = self.config['bot']['check_interval']
-        self.smart_scheduler = SmartScheduler(base_interval)
+            # Initialize components
+            self.db = Database()
+            self.duplicate_detector = DuplicateDetector(
+                threshold=self.config['duplicate_detection']['similarity_threshold']
+            )
 
-        # Initialize image fetcher
-        image_config = self.config.get('images', {})
-        self.image_fetcher = ImageFetcher() if image_config.get('enabled', True) else None
+            # Initialize Twitter client (API or Selenium based on config)
+            self.mode = self.config.get('mode', 'selenium')
+            self.twitter = self._init_twitter_client()
 
-        mode_label = "API" if self.mode == 'api' else "Selenium (No API)"
-        self.logger.info(f"✅ Bot initialized with personality: {personality}, mode: {mode_label}")
+            # Initialize AI generator
+            self.ai = self._init_ai_generator()
+
+            # Set personality
+            personality = self.config['bot']['personality']
+            self.ai.set_personality(personality)
+
+            # Initialize human behavior simulator
+            human_behavior_config = self.config.get('human_behavior', {})
+            self.human_behavior = HumanBehavior(human_behavior_config)
+
+            # Initialize smart scheduler
+            base_interval = self.config['bot']['check_interval']
+            self.smart_scheduler = SmartScheduler(base_interval)
+
+            # Initialize image fetcher
+            image_config = self.config.get('images', {})
+            self.image_fetcher = ImageFetcher() if image_config.get('enabled', True) else None
+
+            # Register cleanup handlers
+            atexit.register(self.cleanup)
+            signal.signal(signal.SIGTERM, self._signal_handler)
+            signal.signal(signal.SIGINT, self._signal_handler)
+
+            # Cleanup old files
+            cleanup_old_files('logs', days=7, pattern='*.log')
+            cleanup_old_files('downloads', days=1, pattern='*')
+
+            mode_label = "API" if self.mode == 'api' else "Selenium (No API)"
+            self.logger.info(f"✅ Bot initialized with personality: {personality}, mode: {mode_label}")
+
+        except Exception as e:
+            self.logger.error(f"Fatal error during initialization: {e}", exc_info=True)
+            self.cleanup()
+            raise
 
     def _setup_logging(self):
         """Setup logging configuration"""
@@ -133,12 +171,25 @@ class XPopBot:
 
     def run_cycle(self):
         """Run one complete bot cycle"""
+        # Check if shutdown requested
+        if self._shutdown_requested:
+            self.logger.info("⚠️ Shutdown requested, skipping cycle")
+            return
+
+        # Health check
+        if not self.is_healthy():
+            self.logger.error("❌ Health check failed, skipping cycle")
+            return
+
         self.logger.info("=" * 60)
         self.logger.info(f"🔄 Starting bot cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.logger.info("=" * 60)
 
         try:
             # Step 1: Collect tweets
+            if self._shutdown_requested:
+                return
+
             collected_tweets = self.collect_tweets()
 
             if not collected_tweets:
@@ -147,6 +198,9 @@ class XPopBot:
                 return
 
             # Step 2: Process and filter tweets
+            if self._shutdown_requested:
+                return
+
             processed_tweets = self.process_collected_tweets(collected_tweets)
 
             if not processed_tweets:
@@ -155,6 +209,9 @@ class XPopBot:
                 return
 
             # Step 3: Generate and post new tweets
+            if self._shutdown_requested:
+                return
+
             self.generate_and_post_tweets(processed_tweets)
 
             # Step 4: Print statistics
@@ -162,6 +219,9 @@ class XPopBot:
 
             self.logger.info("✅ Cycle completed successfully")
 
+        except KeyboardInterrupt:
+            self.logger.info("⚠️ Interrupted by user")
+            self._shutdown_requested = True
         except Exception as e:
             self.logger.error(f"❌ Error in bot cycle: {e}", exc_info=True)
 
@@ -397,3 +457,91 @@ class XPopBot:
                 self.logger.info(f"   {generated}")
 
         self.logger.info("\n✅ Dry run completed")
+
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals gracefully"""
+        signal_name = 'SIGTERM' if signum == signal.SIGTERM else 'SIGINT'
+        self.logger.info(f"\n⚠️ Received {signal_name}, shutting down gracefully...")
+        self._shutdown_requested = True
+        self.cleanup()
+
+    def cleanup(self):
+        """Clean up resources before shutdown"""
+        if hasattr(self, '_cleanup_done') and self._cleanup_done:
+            return
+
+        self.logger.info("🧹 Cleaning up resources...")
+
+        try:
+            # Close Selenium driver if exists
+            if self.twitter and hasattr(self.twitter, 'driver'):
+                try:
+                    self.twitter.driver.quit()
+                    self.logger.info("✅ Closed Selenium driver")
+                except Exception as e:
+                    self.logger.warning(f"Error closing Selenium driver: {e}")
+
+            # Close database connection
+            if self.db and hasattr(self.db, 'close'):
+                try:
+                    self.db.close()
+                    self.logger.info("✅ Closed database connection")
+                except Exception as e:
+                    self.logger.warning(f"Error closing database: {e}")
+
+            # Cleanup image fetcher
+            if self.image_fetcher:
+                try:
+                    self.image_fetcher.cleanup_old_images()
+                    self.logger.info("✅ Cleaned up images")
+                except Exception as e:
+                    self.logger.warning(f"Error cleaning images: {e}")
+
+            # Cleanup old logs
+            try:
+                cleanup_old_files('logs', days=7, pattern='*.log')
+                cleanup_old_files('downloads', days=1, pattern='*')
+            except Exception as e:
+                self.logger.warning(f"Error cleaning old files: {e}")
+
+            self.logger.info("✅ Cleanup completed")
+
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
+
+        finally:
+            self._cleanup_done = True
+
+    def is_healthy(self) -> bool:
+        """Check if bot is healthy and ready to run"""
+        try:
+            # Check disk space
+            if not check_disk_space(min_mb=50):
+                self.logger.error("Not enough disk space")
+                return False
+
+            # Check database
+            if not self.db:
+                self.logger.error("Database not initialized")
+                return False
+
+            # Check AI
+            if not self.ai:
+                self.logger.error("AI generator not initialized")
+                return False
+
+            # Check Twitter client
+            if not self.twitter:
+                self.logger.error("Twitter client not initialized")
+                return False
+
+            # Check config
+            if not self.config:
+                self.logger.error("Config not loaded")
+                return False
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Health check failed: {e}")
+            return False
