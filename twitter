@@ -110,7 +110,7 @@ show_menu() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    read -p "$(echo -e ${YELLOW}Seçiminiz [0-8]: ${NC})" choice
+    read -p "$(echo -e "${YELLOW}Seçiminiz [0-8]: ${NC}")" choice
 
     case $choice in
         1) show_stats ;;
@@ -135,7 +135,7 @@ show_stats() {
     clear
     ./stats.sh
     echo ""
-    read -p "$(echo -e ${YELLOW}Enter ile geri dön...${NC})"
+    read -p "$(echo -e "${YELLOW}Enter ile geri dön...${NC}")"
     show_menu
 }
 
@@ -178,7 +178,7 @@ restart_bot() {
 # Stop
 stop_bot() {
     echo ""
-    read -p "$(echo -e ${YELLOW}⚠️  Bot'u durdurmak istediğinizden emin misiniz? [e/H]: ${NC})" confirm
+    read -p "$(echo -e "${YELLOW}⚠️  Bot'u durdurmak istediğinizden emin misiniz? [e/H]: ${NC}")" confirm
 
     if [[ $confirm =~ ^[Ee]$ ]]; then
         echo -e "${YELLOW}⏸️  Bot durduruluyor...${NC}"
@@ -240,7 +240,7 @@ show_config() {
     fi
 
     echo ""
-    read -p "$(echo -e ${YELLOW}Enter ile geri dön...${NC})"
+    read -p "$(echo -e "${YELLOW}Enter ile geri dön...${NC}")"
     show_menu
 }
 
@@ -269,7 +269,7 @@ show_logs() {
     fi
 
     echo ""
-    read -p "$(echo -e ${YELLOW}Enter ile geri dön...${NC})"
+    read -p "$(echo -e "${YELLOW}Enter ile geri dön...${NC}")"
     show_menu
 }
 
