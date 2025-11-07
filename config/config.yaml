@@ -41,6 +41,26 @@ duplicate_detection:
   similarity_threshold: 0.85  # 0-1 arası (0.85 = %85 benzerlik)
   check_last_days: 7  # Son kaç günün tweetlerini kontrol et
 
+# Görsel/Resim Ayarları
+images:
+  enabled: true  # Tweet'lere otomatik resim eklensin mi?
+  # Google Images'dan otomatik arama yapılır
+
+# İnsan Davranışı Simülasyonu
+human_behavior:
+  # Rastgele zamanlama (base interval + 5-20 dakika arası rastgele)
+  random_timing:
+    enabled: true
+    min_extra_minutes: 5   # Minimum ekstra dakika
+    max_extra_minutes: 20  # Maksimum ekstra dakika
+
+  # Çalışma saatleri (bu saatler dışında tweet atmaz)
+  working_hours_start: 7   # Sabah 07:00
+  working_hours_end: 1     # Gece 01:00 (sabaha kadar)
+
+  # Rastgele atlama (bazen tweet atmamak - insan gibi)
+  random_skip_chance: 0.05  # %5 ihtimalle bir cycle'ı atla
+
 # Debug
 debug:
   enabled: false

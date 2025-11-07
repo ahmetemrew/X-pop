@@ -14,6 +14,8 @@ from .selenium_twitter_client import SeleniumTwitterClient
 from .ai_generator import AIGenerator
 from .database import Database
 from .duplicate_detector import DuplicateDetector
+from .human_behavior import HumanBehavior, SmartScheduler
+from .image_fetcher import ImageFetcher
 
 
 class XPopBot:
@@ -47,6 +49,18 @@ class XPopBot:
         # Set personality
         personality = self.config['bot']['personality']
         self.ai.set_personality(personality)
+
+        # Initialize human behavior simulator
+        human_behavior_config = self.config.get('human_behavior', {})
+        self.human_behavior = HumanBehavior(human_behavior_config)
+
+        # Initialize smart scheduler
+        base_interval = self.config['bot']['check_interval']
+        self.smart_scheduler = SmartScheduler(base_interval)
+
+        # Initialize image fetcher
+        image_config = self.config.get('images', {})
+        self.image_fetcher = ImageFetcher() if image_config.get('enabled', True) else None
 
         mode_label = "API" if self.mode == 'api' else "Selenium (No API)"
         self.logger.info(f"✅ Bot initialized with personality: {personality}, mode: {mode_label}")
@@ -200,13 +214,23 @@ class XPopBot:
         return unique_tweets
 
     def generate_and_post_tweets(self, source_tweets: List[Dict]):
-        """Generate and post new tweets"""
+        """Generate and post new tweets with human behavior simulation"""
         self.logger.info("🤖 Generating AI tweets...")
+
+        # Random delay before generation (human thinking time)
+        delays = self.human_behavior.get_random_action_delays()
+        import time
+        time.sleep(delays['before_generate'])
 
         tweets_to_post = self.config['bot']['tweets_to_post_per_run']
         personality = self.config['bot']['personality']
 
         posted_count = 0
+
+        # Random skip chance (sometimes humans don't post)
+        if self.human_behavior.should_skip_this_run():
+            self.logger.info("🎲 Randomly skipping this run (human behavior)")
+            return
 
         # Group tweets by topic if there are many
         if len(source_tweets) > 5:
@@ -227,15 +251,40 @@ class XPopBot:
                 self.logger.warning(f"  Failed to generate tweet #{i+1}")
                 continue
 
+            # Add human variance to text (sometimes small changes)
+            generated_tweet = self.human_behavior.add_human_variance_to_text(generated_tweet)
+
             self.logger.info(f"  Generated: {generated_tweet[:80]}...")
+
+            # Typing simulation delay
+            typing_delay = self.human_behavior.typing_simulation(len(generated_tweet))
+            time.sleep(min(typing_delay, 10))  # Max 10 seconds
 
             # Check if generated tweet is duplicate
             if self.db.is_content_duplicate(generated_tweet):
                 self.logger.warning("  Generated tweet is duplicate, skipping...")
                 continue
 
-            # Post tweet
-            tweet_id = self.twitter.post_tweet(generated_tweet)
+            # Fetch image if enabled
+            image_path = None
+            if self.image_fetcher:
+                try:
+                    self.logger.info("🖼️  Searching for related image...")
+                    image_path = self.image_fetcher.fetch_image_for_tweet(generated_tweet)
+
+                    if image_path:
+                        self.logger.info(f"✅ Image found: {image_path}")
+                    else:
+                        self.logger.info("ℹ️  No image found, posting without image")
+
+                except Exception as e:
+                    self.logger.error(f"Image fetch error: {e}")
+
+            # Delay before posting (human hesitation)
+            time.sleep(delays['before_post'])
+
+            # Post tweet with image
+            tweet_id = self.twitter.post_tweet(generated_tweet, image_path=image_path)
 
             if tweet_id:
                 # Save to database
@@ -254,7 +303,21 @@ class XPopBot:
                 posted_count += 1
                 self.logger.info(f"  ✅ Posted tweet #{posted_count}")
 
+                # Delay after posting (human behavior)
+                time.sleep(delays['after_post'])
+
+                # Cleanup image if was downloaded
+                if image_path and os.path.exists(image_path):
+                    try:
+                        os.remove(image_path)
+                    except:
+                        pass
+
         self.logger.info(f"📤 Posted {posted_count} tweet(s)")
+
+        # Cleanup old images
+        if self.image_fetcher:
+            self.image_fetcher.cleanup_old_images()
 
     def _print_statistics(self):
         """Print bot statistics"""

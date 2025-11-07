@@ -140,12 +140,13 @@ class TwitterClient:
         self.logger.info(f"Retrieved total {len(all_tweets)} tweets from {len(usernames)} users")
         return all_tweets
 
-    def post_tweet(self, text: str) -> Optional[str]:
+    def post_tweet(self, text: str, image_path: str = None) -> Optional[str]:
         """
-        Post a tweet
+        Post a tweet with optional image
 
         Args:
             text: Tweet text (max 280 characters)
+            image_path: Path to image file (optional)
 
         Returns:
             Tweet ID if successful, None otherwise
@@ -155,12 +156,25 @@ class TwitterClient:
                 self.logger.warning(f"Tweet too long ({len(text)} chars), truncating...")
                 text = text[:277] + "..."
 
+            # Upload image if provided
+            media_ids = None
+            if image_path:
+                try:
+                    self.logger.info(f"📤 Uploading image: {image_path}")
+                    media = self.api.media_upload(image_path)
+                    media_ids = [media.media_id]
+                    self.logger.info(f"✅ Image uploaded! Media ID: {media.media_id}")
+                except Exception as e:
+                    self.logger.error(f"Failed to upload image: {e}")
+                    # Continue without image
+
             # Post using API v2
-            response = self.client.create_tweet(text=text)
+            response = self.client.create_tweet(text=text, media_ids=media_ids)
 
             if response.data:
                 tweet_id = response.data['id']
-                self.logger.info(f"✅ Tweet posted successfully! ID: {tweet_id}")
+                img_status = " (with image)" if media_ids else ""
+                self.logger.info(f"✅ Tweet posted successfully{img_status}! ID: {tweet_id}")
                 return tweet_id
             else:
                 self.logger.error("Failed to post tweet: No response data")

@@ -325,12 +325,13 @@ class SeleniumTwitterClient:
         self.logger.info(f"Retrieved total {len(all_tweets)} tweets from {len(usernames)} users")
         return all_tweets
 
-    def post_tweet(self, text: str) -> Optional[str]:
+    def post_tweet(self, text: str, image_path: str = None) -> Optional[str]:
         """
-        Post a tweet
+        Post a tweet with optional image
 
         Args:
             text: Tweet text (max 280 characters)
+            image_path: Path to image file (optional)
 
         Returns:
             Tweet URL if successful, None otherwise
@@ -347,6 +348,24 @@ class SeleniumTwitterClient:
             # Go to home page
             self.driver.get("https://twitter.com/home")
             time.sleep(3)
+
+            # Upload image if provided
+            if image_path and os.path.exists(image_path):
+                try:
+                    self.logger.info(f"📤 Uploading image: {image_path}")
+
+                    # Find file input (hidden) for image upload
+                    file_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='file'][accept*='image']")
+
+                    # Send file path to input
+                    file_input.send_keys(os.path.abspath(image_path))
+                    time.sleep(3)  # Wait for upload
+
+                    self.logger.info(f"✅ Image uploaded!")
+
+                except Exception as e:
+                    self.logger.error(f"Failed to upload image: {e}")
+                    # Continue without image
 
             # Find tweet box
             tweet_box = self.wait.until(
@@ -367,7 +386,8 @@ class SeleniumTwitterClient:
 
             time.sleep(3)
 
-            self.logger.info(f"✅ Tweet posted successfully!")
+            img_status = " (with image)" if image_path else ""
+            self.logger.info(f"✅ Tweet posted successfully{img_status}!")
             return f"https://twitter.com/{self.username}"  # Can't get exact tweet ID easily
 
         except Exception as e:
