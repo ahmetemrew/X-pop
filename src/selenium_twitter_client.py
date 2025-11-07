@@ -71,7 +71,23 @@ class SeleniumTwitterClient:
         chrome_options.add_argument("--window-size=1920,1080")
 
         # Initialize driver
-        service = Service(ChromeDriverManager().install())
+        driver_path = ChromeDriverManager().install()
+
+        # Fix: Ensure we have the actual chromedriver binary, not THIRD_PARTY_NOTICES
+        if 'THIRD_PARTY_NOTICES' in driver_path or not os.path.isfile(driver_path):
+            # Look for actual chromedriver in the same directory
+            driver_dir = os.path.dirname(driver_path)
+            chromedriver_path = os.path.join(driver_dir, 'chromedriver')
+            if os.path.isfile(chromedriver_path):
+                driver_path = chromedriver_path
+            else:
+                # Try without extension
+                for filename in os.listdir(driver_dir):
+                    if filename.startswith('chromedriver') and 'THIRD_PARTY' not in filename:
+                        driver_path = os.path.join(driver_dir, filename)
+                        break
+
+        service = Service(driver_path)
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
         # Stealth
