@@ -25,21 +25,23 @@ cat << "EOF"
 EOF
 echo -e "${NC}\n"
 
-# Check if running as root
+# Root kontrolü (uyarı ver ama engelleme)
 if [ "$EUID" -eq 0 ]; then
-    echo -e "${RED}❌ Bu scripti root olarak çalıştırmayın!${NC}"
-    echo -e "${YELLOW}Normal kullanıcı ile çalıştırın: ./install.sh${NC}\n"
-    exit 1
+    echo -e "${YELLOW}⚠️  Root olarak çalışıyorsunuz.${NC}"
+    echo -e "${YELLOW}Virtual environment root dizininde oluşturulacak.${NC}\n"
+    SUDO=""
+else
+    SUDO="sudo"
 fi
 
 echo -e "${BLUE}[1/6]${NC} Sistem güncellemesi yapılıyor...\n"
-sudo apt update -qq
+$SUDO apt update -qq
 
 # Python kontrolü
 echo -e "${BLUE}[2/6]${NC} Python kontrol ediliyor...\n"
 if ! command -v python3 &> /dev/null; then
     echo -e "${YELLOW}⚠️  Python bulunamadı, kuruluyor...${NC}"
-    sudo apt install -y python3 python3-pip python3-venv
+    $SUDO apt install -y python3 python3-pip python3-venv
     echo -e "${GREEN}✅ Python kuruldu!${NC}\n"
 else
     PYTHON_VERSION=$(python3 --version)
@@ -54,7 +56,7 @@ if ! command -v google-chrome &> /dev/null; then
     # Chrome'u indir ve kur
     cd /tmp
     wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-    sudo apt install -y ./google-chrome-stable_current_amd64.deb
+    $SUDO apt install -y ./google-chrome-stable_current_amd64.deb
     rm google-chrome-stable_current_amd64.deb
     cd - > /dev/null
 
@@ -66,7 +68,7 @@ fi
 
 # Gerekli sistem paketleri
 echo -e "${BLUE}[4/6]${NC} Gerekli sistem paketleri kuruluyor...\n"
-sudo apt install -y \
+$SUDO apt install -y \
     wget \
     curl \
     git \
