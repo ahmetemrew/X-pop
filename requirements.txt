@@ -1,0 +1,23 @@
+# Twitter/X API
+tweepy==4.14.0
+
+# AI Integration
+groq==0.9.0
+
+# Scheduling
+APScheduler==3.10.4
+
+# Database
+sqlalchemy==2.0.23
+
+# Configuration
+pyyaml==6.0.1
+python-dotenv==1.0.0
+
+# Web Automation (Alternative method)
+selenium==4.16.0
+webdriver-manager==4.0.1
+
+# Utils
+requests==2.31.0
+colorama==0.4.6

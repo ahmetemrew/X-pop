@@ -1,0 +1,19 @@
+[Unit]
+Description=X-Pop Bot - AI-powered Twitter/X Bot
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/path/to/X-pop
+ExecStart=/path/to/X-pop/venv/bin/python -m src.main
+Restart=always
+RestartSec=10
+StandardOutput=append:/path/to/X-pop/logs/bot.log
+StandardError=append:/path/to/X-pop/logs/error.log
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target

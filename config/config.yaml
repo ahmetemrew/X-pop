@@ -1,0 +1,42 @@
+# X-Pop Bot Konfigürasyonu
+
+# İzlenecek Twitter/X Hesapları
+monitored_accounts:
+  - "bbcturkce"
+  - "cnnturk"
+  - "NTV"
+  # Buraya takip etmek istediğiniz hesapları ekleyin
+
+# Bot Ayarları
+bot:
+  # Kişilik profili (personalities.yaml'dan seçin: yorumcu, haber_duyurucu, analist, mizahci)
+  personality: "yorumcu"
+
+  # Kontrol aralığı (dakika)
+  check_interval: 5
+
+  # Her çalıştırmada maksimum kaç tweet işlensin
+  max_tweets_per_run: 10
+
+  # Her çalıştırmada kaç tweet atılsın
+  tweets_to_post_per_run: 1
+
+  # Minimum kelime sayısı (çok kısa tweetleri göz ardı et)
+  min_tweet_length: 20
+
+# AI Ayarları
+ai:
+  model: "llama-3.1-70b-versatile"  # Groq model
+  temperature: 0.7  # 0-1 arası (0: tutarlı, 1: yaratıcı)
+  max_tokens: 280  # Tweet limiti
+
+# Duplicate Detection
+duplicate_detection:
+  enabled: true
+  similarity_threshold: 0.85  # 0-1 arası (0.85 = %85 benzerlik)
+  check_last_days: 7  # Son kaç günün tweetlerini kontrol et
+
+# Debug
+debug:
+  enabled: false
+  save_raw_tweets: true
