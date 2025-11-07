@@ -31,10 +31,22 @@ fi
 
 # Geçerli dizin ve kullanıcı
 CURRENT_DIR=$(pwd)
-CURRENT_USER=$(logname)
+
+# Root olarak çalışıyorsa kullanıcı root, değilse mevcut kullanıcı
+if [ "$EUID" -eq 0 ] && [ -z "$SUDO_USER" ]; then
+    CURRENT_USER="root"
+else
+    CURRENT_USER="${SUDO_USER:-$(logname 2>/dev/null || whoami)}"
+fi
 
 echo -e "${YELLOW}📁 Proje dizini: ${CURRENT_DIR}${NC}"
 echo -e "${YELLOW}👤 Kullanıcı: ${CURRENT_USER}${NC}\n"
+
+# Log dizinini oluştur
+echo -e "${CYAN}[0/5]${NC} Log dizini oluşturuluyor...\n"
+mkdir -p $CURRENT_DIR/logs
+chown $CURRENT_USER:$CURRENT_USER $CURRENT_DIR/logs 2>/dev/null || true
+echo -e "${GREEN}✅ Log dizini oluşturuldu${NC}\n"
 
 # Service dosyası oluştur
 SERVICE_FILE="/etc/systemd/system/xpop-bot.service"
