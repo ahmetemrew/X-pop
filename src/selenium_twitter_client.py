@@ -48,51 +48,64 @@ class SeleniumTwitterClient:
 
     def _init_driver(self, headless: bool) -> webdriver.Chrome:
         """Initialize Chrome WebDriver"""
-        chrome_options = Options()
+        try:
+            chrome_options = Options()
 
-        if headless:
-            chrome_options.add_argument("--headless=new")
-            chrome_options.add_argument("--disable-gpu")
+            if headless:
+                chrome_options.add_argument("--headless=new")
+                chrome_options.add_argument("--disable-gpu")
 
-        # Additional options for stability
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
+            # Additional options for stability
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_argument("--disable-software-rasterizer")
+            chrome_options.add_argument("--disable-extensions")
+            chrome_options.add_argument("--disable-background-networking")
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
 
-        # User agent
-        chrome_options.add_argument(
-            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
+            # User agent
+            chrome_options.add_argument(
+                "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
 
-        # Window size
-        chrome_options.add_argument("--window-size=1920,1080")
+            # Window size
+            chrome_options.add_argument("--window-size=1920,1080")
 
-        # Initialize driver
-        driver_path = ChromeDriverManager().install()
+            self.logger.info("Installing ChromeDriver...")
 
-        # Fix: Ensure we have the actual chromedriver binary, not THIRD_PARTY_NOTICES
-        if 'THIRD_PARTY_NOTICES' in driver_path or not os.path.isfile(driver_path):
-            # Look for actual chromedriver in the same directory
-            driver_dir = os.path.dirname(driver_path)
-            chromedriver_path = os.path.join(driver_dir, 'chromedriver')
-            if os.path.isfile(chromedriver_path):
-                driver_path = chromedriver_path
+            # Initialize driver
+            driver_path = ChromeDriverManager().install()
+
+            # Fix: Ensure we have the actual chromedriver binary, not THIRD_PARTY_NOTICES
+            if 'THIRD_PARTY_NOTICES' in driver_path or not os.path.isfile(driver_path):
+                # Look for actual chromedriver in the same directory
+                driver_dir = os.path.dirname(driver_path)
+                chromedriver_path = os.path.join(driver_dir, 'chromedriver')
+                if os.path.isfile(chromedriver_path):
+                    driver_path = chromedriver_path
+                else:
+                    # Try without extension
+                    for filename in os.listdir(driver_dir):
+                        if filename.startswith('chromedriver') and 'THIRD_PARTY' not in filename:
+                            driver_path = os.path.join(driver_dir, filename)
+                            break
+
+            # Ensure chromedriver is executable
+            if os.path.isfile(driver_path):
+                os.chmod(driver_path, 0o755)
+                self.logger.info(f"ChromeDriver path: {driver_path}")
             else:
-                # Try without extension
-                for filename in os.listdir(driver_dir):
-                    if filename.startswith('chromedriver') and 'THIRD_PARTY' not in filename:
-                        driver_path = os.path.join(driver_dir, filename)
-                        break
+                raise FileNotFoundError(f"ChromeDriver not found at {driver_path}")
 
-        # Ensure chromedriver is executable
-        if os.path.isfile(driver_path):
-            os.chmod(driver_path, 0o755)
+            service = Service(driver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
 
-        service = Service(driver_path)
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Chrome driver: {e}", exc_info=True)
+            raise
 
         # Stealth
         driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {

@@ -20,11 +20,22 @@ class AIGenerator:
             temperature: Creativity level (0.0-1.0)
             max_tokens: Maximum tokens for response
         """
-        self.client = Groq(api_key=api_key)
+        self.logger = logging.getLogger(__name__)
+
+        if not api_key:
+            raise ValueError("Groq API key is required")
+
+        try:
+            # Initialize Groq client - only with api_key parameter
+            self.client = Groq(api_key=api_key)
+            self.logger.info("Groq client initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Groq client: {e}")
+            raise
+
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self.logger = logging.getLogger(__name__)
 
         self.personalities = self._load_personalities()
         self.current_personality = None

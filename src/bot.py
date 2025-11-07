@@ -107,14 +107,28 @@ class XPopBot:
     def _init_ai_generator(self) -> AIGenerator:
         """Initialize AI generator"""
         try:
-            return AIGenerator(
-                api_key=os.getenv('GROQ_API_KEY'),
-                model=self.config['ai']['model'],
-                temperature=self.config['ai']['temperature'],
-                max_tokens=self.config['ai']['max_tokens']
+            api_key = os.getenv('GROQ_API_KEY')
+            if not api_key:
+                raise ValueError("GROQ_API_KEY not found in environment variables")
+
+            model = self.config['ai']['model']
+            temperature = self.config['ai'].get('temperature', 0.7)
+            max_tokens = self.config['ai'].get('max_tokens', 280)
+
+            self.logger.info(f"Initializing AI with model: {model}, temp: {temperature}")
+
+            ai_gen = AIGenerator(
+                api_key=api_key,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
+
+            self.logger.info("✅ AI generator initialized successfully")
+            return ai_gen
+
         except Exception as e:
-            self.logger.error(f"Failed to initialize AI generator: {e}")
+            self.logger.error(f"Failed to initialize AI generator: {e}", exc_info=True)
             raise
 
     def run_cycle(self):
