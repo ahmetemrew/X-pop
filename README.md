@@ -2,6 +2,20 @@
 
 Twitter/X için yapay zeka destekli, kişiselleştirilebilir bot sistemi. Belirlediğiniz hesapları takip eder, tweetleri analiz eder ve kendi tarzında yeni tweetler oluşturur.
 
+## 🚀 İki Çalışma Modu
+
+### 1. API Mode (Önerilen) 🔑
+- Twitter API kullanır
+- Hızlı ve güvenilir
+- **Ücretsiz** Twitter Developer Account gerekli
+- Detaylar: [SETUP_GUIDE.md](SETUP_GUIDE.md)
+
+### 2. Selenium Mode (API Gerekmez!) 🌐
+- Web scraping kullanır
+- **API anahtarı gerekmez**, sadece kullanıcı adı/şifre
+- Daha yavaş ama tamamen ücretsiz
+- Detaylar: [SELENIUM_SETUP.md](SELENIUM_SETUP.md)
+
 ## ✨ Özellikler
 
 - 🔄 **Otomatik Tweet Toplama**: Belirlediğiniz hesapları her 5 dakikada bir (ayarlanabilir) kontrol eder
@@ -11,6 +25,7 @@ Twitter/X için yapay zeka destekli, kişiselleştirilebilir bot sistemi. Belirl
 - 💾 **SQLite Database**: Tüm veriler yerel olarak saklanır
 - 📊 **İstatistikler**: Toplanan ve paylaşılan tweet istatistikleri
 - ⏰ **Zamanlanmış Çalıştırma**: APScheduler ile otomatik çalışma
+- 🔀 **Esnek Mod**: API veya Selenium, siz seçin!
 
 ## 🎭 Kişilikler
 
@@ -43,9 +58,20 @@ Bot 5 farklı kişilik profiliyle çalışabilir:
 
 ## 📋 Gereksinimler
 
+### Her İki Mod İçin
 - Python 3.8+
-- Twitter API Anahtarları (Ücretsiz Developer Account)
-- Groq API Anahtarı (Ücretsiz)
+- Groq API Anahtarı (Ücretsiz) - [console.groq.com](https://console.groq.com/)
+
+### API Mode İçin
+- Twitter API Anahtarları (Ücretsiz Developer Account) - [developer.twitter.com](https://developer.twitter.com/)
+
+### Selenium Mode İçin
+- Chrome Browser
+- Twitter hesap bilgileri (kullanıcı adı/şifre)
+
+**Hangisini seçmeliyim?**
+- 🔑 **API Mode**: Production kullanım, hızlı, güvenilir → [SETUP_GUIDE.md](SETUP_GUIDE.md)
+- 🌐 **Selenium Mode**: API istemiyorsanız, test için → [SELENIUM_SETUP.md](SELENIUM_SETUP.md)
 
 ## 🚀 Kurulum
 

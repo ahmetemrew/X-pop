@@ -10,6 +10,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from .twitter_client import TwitterClient
+from .selenium_twitter_client import SeleniumTwitterClient
 from .ai_generator import AIGenerator
 from .database import Database
 from .duplicate_detector import DuplicateDetector
@@ -36,7 +37,8 @@ class XPopBot:
             threshold=self.config['duplicate_detection']['similarity_threshold']
         )
 
-        # Initialize Twitter client
+        # Initialize Twitter client (API or Selenium based on config)
+        self.mode = self.config.get('mode', 'api')
         self.twitter = self._init_twitter_client()
 
         # Initialize AI generator
@@ -46,7 +48,8 @@ class XPopBot:
         personality = self.config['bot']['personality']
         self.ai.set_personality(personality)
 
-        self.logger.info(f"✅ Bot initialized with personality: {personality}")
+        mode_label = "API" if self.mode == 'api' else "Selenium (No API)"
+        self.logger.info(f"✅ Bot initialized with personality: {personality}, mode: {mode_label}")
 
     def _setup_logging(self):
         """Setup logging configuration"""
@@ -61,16 +64,28 @@ class XPopBot:
         )
         self.logger = logging.getLogger(__name__)
 
-    def _init_twitter_client(self) -> TwitterClient:
-        """Initialize Twitter API client"""
+    def _init_twitter_client(self):
+        """Initialize Twitter client (API or Selenium)"""
         try:
-            return TwitterClient(
-                api_key=os.getenv('TWITTER_API_KEY'),
-                api_secret=os.getenv('TWITTER_API_SECRET'),
-                access_token=os.getenv('TWITTER_ACCESS_TOKEN'),
-                access_token_secret=os.getenv('TWITTER_ACCESS_TOKEN_SECRET'),
-                bearer_token=os.getenv('TWITTER_BEARER_TOKEN')
-            )
+            if self.mode == 'api':
+                self.logger.info("Initializing Twitter API client...")
+                return TwitterClient(
+                    api_key=os.getenv('TWITTER_API_KEY'),
+                    api_secret=os.getenv('TWITTER_API_SECRET'),
+                    access_token=os.getenv('TWITTER_ACCESS_TOKEN'),
+                    access_token_secret=os.getenv('TWITTER_ACCESS_TOKEN_SECRET'),
+                    bearer_token=os.getenv('TWITTER_BEARER_TOKEN')
+                )
+            elif self.mode == 'selenium':
+                self.logger.info("Initializing Selenium Twitter client...")
+                return SeleniumTwitterClient(
+                    username=os.getenv('TWITTER_USERNAME'),
+                    password=os.getenv('TWITTER_PASSWORD'),
+                    email=os.getenv('TWITTER_EMAIL'),
+                    headless=os.getenv('SELENIUM_HEADLESS', 'true').lower() == 'true'
+                )
+            else:
+                raise ValueError(f"Invalid mode: {self.mode}. Must be 'api' or 'selenium'")
         except Exception as e:
             self.logger.error(f"Failed to initialize Twitter client: {e}")
             raise
@@ -254,14 +269,23 @@ class XPopBot:
         self.logger.info("")
 
     def test_connection(self):
-        """Test Twitter API connection"""
-        self.logger.info("🔌 Testing Twitter API connection...")
-        if self.twitter.verify_credentials():
-            self.logger.info("✅ Twitter API connection successful!")
-            return True
-        else:
-            self.logger.error("❌ Twitter API connection failed!")
-            return False
+        """Test Twitter connection (API or Selenium)"""
+        self.logger.info(f"🔌 Testing Twitter connection ({self.mode} mode)...")
+
+        if self.mode == 'api':
+            if self.twitter.verify_credentials():
+                self.logger.info("✅ Twitter API connection successful!")
+                return True
+            else:
+                self.logger.error("❌ Twitter API connection failed!")
+                return False
+        elif self.mode == 'selenium':
+            if self.twitter.is_logged_in:
+                self.logger.info("✅ Selenium Twitter connection successful!")
+                return True
+            else:
+                self.logger.error("❌ Selenium Twitter connection failed!")
+                return False
 
     def dry_run(self):
         """Run bot in dry-run mode (no actual posting)"""
