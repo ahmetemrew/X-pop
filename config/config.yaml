@@ -3,7 +3,7 @@
 # Çalışma Modu
 # "api" - Twitter API kullanır (API anahtarları gerekli, daha güvenilir)
 # "selenium" - Web scraping kullanır (API anahtarı gerekmez, kullanıcı adı/şifre gerekli)
-mode: "api"  # api veya selenium
+mode: "selenium"  # api veya selenium
 
 # İzlenecek Twitter/X Hesapları
 monitored_accounts:
