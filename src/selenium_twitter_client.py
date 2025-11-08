@@ -40,11 +40,11 @@ class SeleniumTwitterClient:
 
         # Initialize Chrome driver
         self.driver = self._init_driver(headless)
-        self.wait = WebDriverWait(self.driver, 30)  # Increased from 20 to 30
+        self.wait = WebDriverWait(self.driver, 120)  # Increased to 120 seconds for slow connections
 
         # Set timeouts
-        self.driver.set_page_load_timeout(60)  # 60 second page load timeout
-        self.driver.implicitly_wait(10)  # 10 second implicit wait
+        self.driver.set_page_load_timeout(120)  # 120 second page load timeout
+        self.driver.implicitly_wait(15)  # 15 second implicit wait
 
         # Login
         self.is_logged_in = False
@@ -52,7 +52,7 @@ class SeleniumTwitterClient:
         try:
             self.login()
         except Exception as e:
-            self.logger.error(f"Login failed during initialization: {e}")
+            self.logger.error(f"Login failed during initialization: {e}", exc_info=True)
             try:
                 self.driver.quit()
             except:
@@ -185,54 +185,145 @@ class SeleniumTwitterClient:
                 self.is_logged_in = True
                 return True
 
-        # Fresh login
-        self.logger.info("Performing fresh login...")
+        # Fresh login with retry logic
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            self.logger.info(f"Performing fresh login (attempt {attempt}/{max_attempts})...")
 
-        try:
-            # Go to login page
-            self.driver.get("https://twitter.com/i/flow/login")
-            time.sleep(3)
-
-            # Enter username
-            username_input = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "input[autocomplete='username']"))
-            )
-            username_input.send_keys(self.username)
-            username_input.send_keys(Keys.RETURN)
-            time.sleep(2)
-
-            # Check for unusual activity (email verification)
             try:
-                email_input = self.driver.find_element(By.CSS_SELECTOR, "input[data-testid='ocfEnterTextTextInput']")
-                if email_input and self.email:
-                    self.logger.info("Email verification required")
-                    email_input.send_keys(self.email)
-                    email_input.send_keys(Keys.RETURN)
-                    time.sleep(2)
-            except NoSuchElementException:
-                pass
+                # Go to login page
+                self.driver.get("https://twitter.com/i/flow/login")
+                time.sleep(8)
 
-            # Enter password
-            password_input = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "input[name='password']"))
-            )
-            password_input.send_keys(self.password)
-            password_input.send_keys(Keys.RETURN)
-            time.sleep(5)
+                # Enter username - try multiple selectors
+                username_input = None
+                username_selectors = [
+                    "input[autocomplete='username']",
+                    "input[name='text']",
+                    "input[type='text']",
+                    "//input[@autocomplete='username']"
+                ]
 
-            # Verify login
-            if self._verify_login():
-                self.logger.info("✅ Login successful")
-                self._save_cookies()
-                self.is_logged_in = True
-                return True
-            else:
-                self.logger.error("❌ Login failed: Could not verify login")
-                return False
+                for selector in username_selectors:
+                    try:
+                        if selector.startswith("//"):
+                            username_input = self.wait.until(
+                                EC.presence_of_element_located((By.XPATH, selector))
+                            )
+                        else:
+                            username_input = self.wait.until(
+                                EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                            )
+                        if username_input:
+                            self.logger.info(f"✓ Found username input")
+                            break
+                    except:
+                        continue
 
-        except Exception as e:
-            self.logger.error(f"❌ Login error: {e}")
-            return False
+                if not username_input:
+                    raise Exception("Could not find username input field")
+
+                username_input.clear()
+                time.sleep(2)
+                for char in self.username:
+                    username_input.send_keys(char)
+                    time.sleep(0.1)
+                time.sleep(3)
+                username_input.send_keys(Keys.RETURN)
+                time.sleep(8)
+
+                # Check for unusual activity (email/phone verification)
+                try:
+                    verification_selectors = [
+                        "input[data-testid='ocfEnterTextTextInput']",
+                        "input[name='text']"
+                    ]
+
+                    for selector in verification_selectors:
+                        try:
+                            verification_input = self.driver.find_element(By.CSS_SELECTOR, selector)
+                            if verification_input and verification_input.is_displayed() and self.email:
+                                self.logger.info("⚠️ Email/phone verification required")
+                                verification_input.clear()
+                                time.sleep(2)
+                                for char in self.email:
+                                    verification_input.send_keys(char)
+                                    time.sleep(0.1)
+                                time.sleep(3)
+                                verification_input.send_keys(Keys.RETURN)
+                                time.sleep(8)
+                                break
+                        except:
+                            continue
+                except Exception as e:
+                    self.logger.info("No verification required")
+
+                # Enter password - try multiple selectors
+                password_input = None
+                password_selectors = [
+                    "input[name='password']",
+                    "input[type='password']",
+                    "input[autocomplete='current-password']",
+                    "//input[@type='password']"
+                ]
+
+                for selector in password_selectors:
+                    try:
+                        if selector.startswith("//"):
+                            password_input = self.wait.until(
+                                EC.presence_of_element_located((By.XPATH, selector))
+                            )
+                        else:
+                            password_input = self.wait.until(
+                                EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                            )
+                        if password_input:
+                            self.logger.info(f"✓ Found password input")
+                            break
+                    except:
+                        continue
+
+                if not password_input:
+                    raise Exception("Could not find password input field")
+
+                password_input.clear()
+                time.sleep(2)
+                for char in self.password:
+                    password_input.send_keys(char)
+                    time.sleep(0.1)
+                time.sleep(3)
+                password_input.send_keys(Keys.RETURN)
+                time.sleep(15)  # Wait longer for login to complete
+
+                # Verify login
+                if self._verify_login():
+                    self.logger.info("✅ Login successful")
+                    self._save_cookies()
+                    self.is_logged_in = True
+                    return True
+                else:
+                    self.logger.warning(f"⚠️ Login verification failed on attempt {attempt}")
+                    if attempt < max_attempts:
+                        self.logger.info(f"Retrying in 10 seconds...")
+                        time.sleep(10)
+                        continue
+
+            except TimeoutException as e:
+                self.logger.error(f"⏱️ Timeout on attempt {attempt}: {e}")
+                if attempt < max_attempts:
+                    self.logger.info(f"Retrying in 10 seconds...")
+                    time.sleep(10)
+                    continue
+            except Exception as e:
+                self.logger.error(f"❌ Login error on attempt {attempt}: {e}", exc_info=True)
+                if attempt < max_attempts:
+                    self.logger.info(f"Retrying in 10 seconds...")
+                    time.sleep(10)
+                    continue
+
+        self.logger.error("❌ Login failed after all attempts")
+        self.logger.error("Possible reasons: Wrong username/password, 2FA enabled, or bot detection")
+        return False
 
     def _verify_login(self) -> bool:
         """Verify if logged in successfully"""
