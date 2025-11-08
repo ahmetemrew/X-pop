@@ -50,9 +50,32 @@ class SeleniumTwitterClient:
         self.is_logged_in = False
 
         try:
-            self.login()
+            login_success = self.login()
+            if not login_success:
+                self.logger.error("=" * 60)
+                self.logger.error("❌ TWITTER LOGIN FAILED!")
+                self.logger.error("=" * 60)
+                self.logger.error("")
+                self.logger.error("🍪 RECOMMENDED: Cookie-Based Login (Most Reliable)")
+                self.logger.error("")
+                self.logger.error("Automatic login often fails due to:")
+                self.logger.error("  • Twitter bot detection")
+                self.logger.error("  • Captcha challenges")
+                self.logger.error("  • 2FA requirements")
+                self.logger.error("")
+                self.logger.error("📋 Quick Fix - Use Cookie Login:")
+                self.logger.error("1. Open Twitter in browser and login")
+                self.logger.error("2. Install 'Cookie Editor' extension")
+                self.logger.error("3. Export cookies as JSON")
+                self.logger.error("4. Save to: data/twitter_cookies.json")
+                self.logger.error("5. Restart bot → sudo systemctl restart xpop-bot")
+                self.logger.error("")
+                self.logger.error("📖 Full guide: cat COOKIE_LOGIN_GUIDE.md")
+                self.logger.error("=" * 60)
+                raise Exception("Twitter login failed. Please use cookie-based login (see COOKIE_LOGIN_GUIDE.md)")
         except Exception as e:
-            self.logger.error(f"Login failed during initialization: {e}", exc_info=True)
+            if "cookie-based login" not in str(e):
+                self.logger.error(f"Login failed during initialization: {e}", exc_info=True)
             try:
                 self.driver.quit()
             except:
