@@ -1,19 +1,36 @@
 [Unit]
-Description=X-Pop Bot - AI-powered Twitter/X Bot
-After=network.target
+Description=X-Pop Twitter Bot - BULLETPROOF MODE
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=your-username
-WorkingDirectory=/path/to/X-pop
-ExecStart=/path/to/X-pop/venv/bin/python -m src.main
-Restart=always
-RestartSec=10
-StandardOutput=append:/path/to/X-pop/logs/bot.log
-StandardError=append:/path/to/X-pop/logs/error.log
-
-# Environment
+User=%USER%
+WorkingDirectory=%WORKDIR%
+Environment="PATH=%WORKDIR%/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONUNBUFFERED=1"
+
+# Execute bot
+ExecStart=%WORKDIR%/venv/bin/python3 -m src.main --interval 10
+
+# Restart policy - AGGRESSIVE (always restart, no limits)
+Restart=always
+RestartSec=10s
+StartLimitInterval=0
+StartLimitBurst=0
+
+# Resource limits
+MemoryLimit=1G
+CPUQuota=200%
+
+# Logging
+StandardOutput=append:/var/log/xpop-bot/stdout.log
+StandardError=append:/var/log/xpop-bot/stderr.log
+SyslogIdentifier=xpop-bot
+
+# Security (optional - uncomment if needed)
+# NoNewPrivileges=true
+# PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
